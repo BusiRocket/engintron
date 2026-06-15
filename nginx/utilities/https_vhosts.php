@@ -22,10 +22,6 @@ define('HTTPD_HTTPS_PORT', '8443');
 define('NGINX_HTTPS_PORT', '443');
 define('NGINX_DEFAULT_HTTPS_VHOST', '/etc/nginx/conf.d/default_https.conf');
 
-//date_default_timezone_set('UTC');
-//ini_set('display_errors', 0);
-//error_reporting(0);
-
 $osDistro = '';
 $osRelease = '';
 if (file_exists('/etc/redhat-release') && is_readable('/etc/redhat-release')) {
@@ -37,7 +33,9 @@ if (file_exists('/etc/redhat-release') && is_readable('/etc/redhat-release')) {
 }
 define('DISTRO', $osDistro);
 define('RELEASE', $osRelease);
-define('NGINX_VERSION', trim(str_replace('nginx version: nginx/', '', shell_exec('nginx -v 2>&1'))));
+$nginx_version_output = shell_exec('nginx -V 2>&1');
+define('NGINX_VERSION', trim(str_replace('nginx version: nginx/', '', preg_match('/nginx\/(\d+\.\d+\.\d+)/', $nginx_version_output, $matches) ? $matches[1] : '')));
+define('NGINX_HAS_HTTP3', strpos($nginx_version_output, '--with-http_v3_module') !== false);
 
 function generate_https_vhosts()
 {
@@ -49,12 +47,34 @@ function generate_https_vhosts()
         $hostnamePemFile = '/var/cpanel/ssl/cpanel/mycpanel.pem';
     }
 
-    // Handle http2 placement
+    // Handle http2 and http3 placement
     $http2_on_listen = ' http2';
     $http2_standalone = '';
-    if (((DISTRO == 'el' && RELEASE >= 7) || DISTRO == 'ubuntu') || version_compare(NGINX_VERSION, '1.25.1', '>=')) {
+    if (version_compare(NGINX_VERSION, '1.25.1', '>=')) {
         $http2_on_listen = '';
         $http2_standalone = 'http2 on;';
+    }
+
+    $http3_directives = '
+    set $HTTP3_AVAILABLE false;';
+    $http3_directives_host = '
+    set $HTTP3_AVAILABLE false;';
+    if (NGINX_HAS_HTTP3 && version_compare(NGINX_VERSION, '1.25.0', '>=')) {
+        $http3_directives = '
+    listen ' . NGINX_HTTPS_PORT . ' quic reuseport default_server;
+    listen [::]:' . NGINX_HTTPS_PORT . ' quic reuseport default_server;
+    
+    # Add Alt-Svc header to negotiate HTTP/3.
+    add_header Alt-Svc \'h3=":' . NGINX_HTTPS_PORT . '"; ma=86400\';
+    set $HTTP3_AVAILABLE true;';
+
+        $http3_directives_host = '
+    listen ' . NGINX_HTTPS_PORT . ' quic;
+    listen [::]:' . NGINX_HTTPS_PORT . ' quic;
+    
+    # Add Alt-Svc header to negotiate HTTP/3.
+    add_header Alt-Svc \'h3=":' . NGINX_HTTPS_PORT . '"; ma=86400\';
+    set $HTTP3_AVAILABLE true;';
     }
 
     // Initialize the output for default_https.conf
@@ -68,20 +88,23 @@ function generate_https_vhosts()
 #  * @license    GNU/GPL license: https://www.gnu.org/copyleft/gpl.html
 #  */
 
-# Default definition block for HTTPS (Generated on '.@date('Y.m.d H:i:s').') #
+# Default definition block for HTTPS (Generated on ' . @date('Y.m.d H:i:s') . ') #
 server {
-    #listen '.NGINX_HTTPS_PORT.' ssl'.$http2_on_listen.' default_server;
-    listen [::]:'.NGINX_HTTPS_PORT.' ssl'.$http2_on_listen.' default_server ipv6only=off;
-    '.$http2_standalone.'
+    ' . $http3_directives . '
+    listen ' . NGINX_HTTPS_PORT . ' ssl' . $http2_on_listen . ' default_server;
+    listen [::]:' . NGINX_HTTPS_PORT . ' ssl' . $http2_on_listen . ' default_server ipv6only=off;
+    ' . $http2_standalone . '
     server_name localhost;
 
     # deny all; # DO NOT REMOVE OR CHANGE THIS LINE - Used when Engintron is disabled to block Nginx from becoming an open proxy
+    
+    set $HTTPS_PORT ' . NGINX_HTTPS_PORT . ';
 
-    ssl_certificate '.$hostnamePemFile.';
-    ssl_certificate_key '.$hostnamePemFile.';
+    ssl_certificate ' . $hostnamePemFile . ';
+    ssl_certificate_key ' . $hostnamePemFile . ';
 
     # OCSP Stapling
-    #ssl_trusted_certificate '.$hostnamePemFile.';
+    #ssl_trusted_certificate ' . $hostnamePemFile . ';
     #ssl_stapling on;
     #ssl_stapling_verify on;
 
@@ -109,7 +132,7 @@ server {
     // Process Apache vhosts
     if (file_exists(HTTPD_CONF) && is_readable(HTTPD_CONF)) {
         $file = file_get_contents(HTTPD_CONF);
-        $regex = "#\<VirtualHost [0-9a-f\.\:\[\]\s]+\:".HTTPD_HTTPS_PORT."\>(.+?)\<\/VirtualHost\>#s";
+        $regex = "#\<VirtualHost [0-9a-f\.\:\[\]\s]+\:" . HTTPD_HTTPS_PORT . "\>(.+?)\<\/VirtualHost\>#s";
         preg_match_all($regex, $file, $matches, PREG_PATTERN_ORDER);
         $vhosts = $matches[1];
         if (count($vhosts)) {
@@ -127,11 +150,11 @@ server {
                 } else {
                     $vhostAliases = '';
                 }
-                $vhostDomains = trim($name[1].' '.$vhostAliases);
+                $vhostDomains = trim($name[1] . ' ' . $vhostAliases);
                 $vhostDomainsForNginx = explode(' ', $vhostDomains);
-                $vhostDomainsForNginx = implode(PHP_EOL.'        ', $vhostDomainsForNginx);
+                $vhostDomainsForNginx = implode(PHP_EOL . '        ', $vhostDomainsForNginx);
                 $vhostDomainsAsComment = str_split($vhostDomains, 250);
-                $vhostDomainsAsComment = implode(PHP_EOL.'# ', $vhostDomainsAsComment);
+                $vhostDomainsAsComment = implode(PHP_EOL . '# ', $vhostDomainsAsComment);
                 $vhostCertFile = $certfile[1];
                 $vhostCertKeyFile = $certkeyfile[1];
                 if (strpos($vhostCertFile, '/combined') !== false) {
@@ -141,10 +164,10 @@ server {
                     $fullChainCertName = str_replace('/var/cpanel/ssl/installed/certs/', '/etc/ssl/engintron/', $vhostCertFile);
                     if ($certcafile[1]) {
                         $vhostCertCAFile = $certcafile[1];
-                        $vhostFullChainCert = file_get_contents($vhostCertFile)."\n".file_get_contents($vhostCertCAFile);
+                        $vhostFullChainCert = file_get_contents($vhostCertFile) . "\n" . file_get_contents($vhostCertCAFile);
                         $ocspStapling = '
     # OCSP Stapling
-    #ssl_trusted_certificate '.$fullChainCertName.';
+    #ssl_trusted_certificate ' . $fullChainCertName . ';
     #ssl_stapling on;
     #ssl_stapling_verify on;
                     ';
@@ -156,16 +179,18 @@ server {
                 }
 
                 $output .= '
-# Definition block for domain(s): '.$vhostDomainsAsComment.' #
+# Definition block for domain(s): ' . $vhostDomainsAsComment . ' #
 server {
-    #listen '.NGINX_HTTPS_PORT.' ssl'.$http2_on_listen.';
-    listen [::]:'.NGINX_HTTPS_PORT.' ssl'.$http2_on_listen.';
-    '.$http2_standalone.'
-    server_name '.$vhostDomainsForNginx.';
+    ' . $http3_directives_host . '
+    listen ' . NGINX_HTTPS_PORT . ' ssl' . $http2_on_listen . ';
+    listen [::]:' . NGINX_HTTPS_PORT . ' ssl' . $http2_on_listen . ';
+    ' . $http2_standalone . '
+    server_name ' . $vhostDomainsForNginx . ';
     # deny all; # DO NOT REMOVE OR CHANGE THIS LINE - Used when Engintron is disabled to block Nginx from becoming an open proxy
-    ssl_certificate '.$fullChainCertName.';
-    ssl_certificate_key '.$vhostCertKeyFile.';
-    '.$ocspStapling.'
+    set $HTTPS_PORT ' . NGINX_HTTPS_PORT . ';
+    ssl_certificate ' . $fullChainCertName . ';
+    ssl_certificate_key ' . $vhostCertKeyFile . ';
+    ' . $ocspStapling . '
     include common_https.conf;
 }
                 ';
@@ -179,6 +204,6 @@ server {
 if (!file_exists(NGINX_DEFAULT_HTTPS_VHOST) || (file_exists(HTTPD_CONF) && is_readable(HTTPD_CONF) && (filemtime(HTTPD_CONF) + HTTPD_CONF_LAST_CHANGED) > time())) {
     generate_https_vhosts();
     exit(1);
-} else {
-    exit(0);
 }
+
+exit(0);

@@ -1,0 +1,13 @@
+
+php:S100("\Rename function "generate_https_vhosts" to match the regular expression ^[a-z][a-zA-Z0-9]*$.(–áŞ¾8ó‹º‰ş1J$625f21a6-80ad-482a-87af-731a587049cf
+s	php:S6035‘"0Replace this alternation with a character class.(Œ¼Ñ¡8ó‹º‰ş1J$2df0f467-71c6-4c92-bd81-427ccf47faf7
+x	php:S6035’"0Replace this alternation with a character class.(›¼ ÿÿÿÿÿ8ô‹º‰ş1J$de4fdb10-8920-4fc3-9402-9e3e4eb5dd0f
+x	php:S6035“"0Replace this alternation with a character class.(ÑÈ§Ôùÿÿÿÿ8ô‹º‰ş1J$6351f1d7-0304-4c7c-b3c8-d2c2c79014ba
+–	php:S3776("TRefactor this function to reduce its Cognitive Complexity from 35 to the 15 allowed.(–áŞ¾8ô‹º‰ş1J$07127403-8884-4f76-a00a-1613c62de8a3
+¤	php:S1192+"bDefine a constant instead of duplicating this literal "/var/cpanel/ssl/cpanel/cpanel.pem" 3 times.(Û¿çÀ8ô‹º‰ş1J$8abe1570-bdc2-40e6-b303-7d8d6b95f95b
+œ	php:S1192"[Define a constant instead of duplicating this literal "/etc/httpd/conf/httpd.conf" 3 times.(µˆğ)8ô‹º‰ş1J$d5c9e30e-cebb-44cb-981f-0bf466ad72c0
+¤	php:S1192"]Define a constant instead of duplicating this literal "/etc/apache2/conf/httpd.conf" 3 times.(Ëâãúÿÿÿÿ8ô‹º‰ş1J$9a933f89-b5ed-4e1b-9e8c-ece8b0c72804
+”	php:S1192?"MDefine a constant instead of duplicating this literal "
+    listen " 4 times.(ıøá³ùÿÿÿÿ8µ·±Šş1J$69a32eb5-4474-4018-9107-57b6586dad27
+«	php:S1192."dDefine a constant instead of duplicating this literal "/var/cpanel/ssl/cpanel/mycpanel.pem" 3 times.(ÛÃğõùÿÿÿÿ8ô‹º‰ş1J$fc8cee45-6081-4efd-a439-43708297d2d6
+Çphp:S138("…This function "generate_https_vhosts" has 153 lines, which is greater than the 150 lines authorized. Split it into smaller functions.(–áŞ¾8â…ç‰ş1J$d06c918b-a556-4866-8ae6-ff36928627c2
